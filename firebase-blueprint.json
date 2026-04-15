@@ -1,0 +1,53 @@
+{
+  "entities": {
+    "CelebrityPhoto": {
+      "title": "CelebrityPhoto",
+      "description": "A photo of a celebrity to be rated",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Name of the celebrity" },
+        "angle": { "type": "string", "description": "Angle of the photo" },
+        "url": { "type": "string", "description": "Base64 or URL of the image" },
+        "averageRating": { "type": "number", "description": "Average rating" },
+        "totalRatings": { "type": "number", "description": "Total number of ratings" },
+        "createdAt": { "type": "number", "description": "Timestamp of creation" }
+      },
+      "required": ["name", "angle", "url", "averageRating", "totalRatings", "createdAt"]
+    },
+    "UserRating": {
+      "title": "UserRating",
+      "description": "A rating given by a user to a photo",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "UID of the user" },
+        "photoId": { "type": "string", "description": "ID of the photo" },
+        "rating": { "type": "number", "description": "Rating value (1-5)" },
+        "timestamp": { "type": "number", "description": "Timestamp of the rating" }
+      },
+      "required": ["userId", "photoId", "rating", "timestamp"]
+    },
+    "AppStats": {
+      "title": "AppStats",
+      "description": "Global application statistics",
+      "type": "object",
+      "properties": {
+        "activeUsers": { "type": "number", "description": "Simulated active user count" }
+      },
+      "required": ["activeUsers"]
+    }
+  },
+  "firestore": {
+    "/photos/{photoId}": {
+      "schema": "CelebrityPhoto",
+      "description": "Collection of celebrity photos"
+    },
+    "/ratings/{ratingId}": {
+      "schema": "UserRating",
+      "description": "Collection of all user ratings"
+    },
+    "/stats/global": {
+      "schema": "AppStats",
+      "description": "Global statistics"
+    }
+  }
+}

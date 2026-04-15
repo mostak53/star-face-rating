@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { mockDB, CelebrityPhoto } from '@/lib/mockFirebase';
+import { db, handleFirestoreError, OperationType } from '@/lib/firebase';
+import { collection, query, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { 
   Table, 
   TableBody, 
@@ -23,39 +24,48 @@ import { Edit, Trash2, Search, ArrowLeft, Star } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function AdminData() {
-  const [photos, setPhotos] = useState<CelebrityPhoto[]>([]);
+  const [photos, setPhotos] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [editingPhoto, setEditingPhoto] = useState<CelebrityPhoto | null>(null);
+  const [editingPhoto, setEditingPhoto] = useState<any | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   useEffect(() => {
-    const loadData = () => {
-      setPhotos(mockDB.getPhotos());
-    };
-    loadData();
-    window.addEventListener('face_rating_updated', loadData);
-    return () => window.removeEventListener('face_rating_updated', loadData);
+    const q = query(collection(db, 'photos'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setPhotos(data);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'photos');
+    });
+    return () => unsubscribe();
   }, []);
 
-  const handleDelete = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this photo?')) {
-      mockDB.deletePhoto(id);
-      setPhotos(mockDB.getPhotos());
-      toast.success('Photo deleted successfully');
+  const handleDelete = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this photo from the Cloud Database?')) {
+      try {
+        await deleteDoc(doc(db, 'photos', id));
+        toast.success('Photo deleted successfully');
+      } catch (error) {
+        handleFirestoreError(error, OperationType.DELETE, `photos/${id}`);
+      }
     }
   };
 
-  const handleEdit = (photo: CelebrityPhoto) => {
+  const handleEdit = (photo: any) => {
     setEditingPhoto({ ...photo });
     setIsEditDialogOpen(true);
   };
 
-  const handleUpdate = () => {
+  const handleUpdate = async () => {
     if (!editingPhoto) return;
-    mockDB.updatePhoto(editingPhoto.id, editingPhoto);
-    setPhotos(mockDB.getPhotos());
-    setIsEditDialogOpen(false);
-    toast.success('Photo updated successfully');
+    try {
+      const { id, ...data } = editingPhoto;
+      await updateDoc(doc(db, 'photos', id), data);
+      setIsEditDialogOpen(false);
+      toast.success('Photo updated successfully');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `photos/${editingPhoto.id}`);
+    }
   };
 
   const filteredPhotos = photos.filter(p => 

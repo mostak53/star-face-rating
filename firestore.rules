@@ -1,0 +1,61 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (request.auth.token.email == "252-15-974@diu.edu.bd" && request.auth.token.email_verified == true);
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidPhoto(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.angle is string && data.angle.size() > 0 && data.angle.size() < 50 &&
+             data.url is string && data.url.size() > 0 &&
+             data.averageRating is number &&
+             data.totalRatings is number &&
+             data.createdAt is number;
+    }
+
+    function isValidRating(data) {
+      return data.userId == request.auth.uid &&
+             data.photoId is string &&
+             data.rating is number && data.rating >= 1 && data.rating <= 5 &&
+             data.timestamp is number;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /photos/{photoId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin() && isValidPhoto(request.resource.data);
+      // Allow users to update ratings count/avg via batch or specific logic if needed, 
+      // but for simplicity we'll let admin update it or implement a more complex rule.
+      // In a real app, you'd use a Cloud Function to update averages.
+      allow update: if isAuthenticated() && 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['averageRating', 'totalRatings']);
+    }
+
+    match /ratings/{ratingId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidRating(request.resource.data);
+      allow update, delete: if isOwner(resource.data.userId) && isValidRating(request.resource.data);
+    }
+
+    match /stats/global {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}

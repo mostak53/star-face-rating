@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { mockDB, CelebrityPhoto } from '@/lib/mockFirebase';
+import { db, handleFirestoreError, OperationType } from '@/lib/firebase';
+import { collection, query, onSnapshot, addDoc, doc, updateDoc, getDocs, where } from 'firebase/firestore';
 import StarRating from '@/components/StarRating';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,39 +13,68 @@ interface RatingProps {
 }
 
 export default function Rating({ user }: RatingProps) {
-  const [photos, setPhotos] = useState<CelebrityPhoto[]>([]);
+  const [photos, setPhotos] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const loadData = () => {
-      const allPhotos = mockDB.getPhotos();
-      const userRatings = mockDB.getUserRatings(user.id);
-      const unratedPhotos = allPhotos.filter(p => !userRatings.some(r => r.photoId === p.id));
-      setPhotos(unratedPhotos);
-      setIsLoading(false);
-    };
+    if (!user?.uid) return;
 
-    loadData();
-    window.addEventListener('face_rating_updated', loadData);
-    return () => window.removeEventListener('face_rating_updated', loadData);
-  }, [user.id]);
+    const photosQuery = query(collection(db, 'photos'));
+    const unsubscribePhotos = onSnapshot(photosQuery, async (snapshot) => {
+      try {
+        const allPhotos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        // Get user's ratings to filter
+        const ratingsQuery = query(collection(db, 'ratings'), where('userId', '==', user.uid));
+        const ratingsSnapshot = await getDocs(ratingsQuery);
+        const ratedPhotoIds = ratingsSnapshot.docs.map(doc => doc.data().photoId);
+        
+        const unratedPhotos = allPhotos.filter((p: any) => !ratedPhotoIds.includes(p.id));
+        setPhotos(unratedPhotos);
+        setIsLoading(false);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.LIST, 'photos/ratings');
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'photos');
+    });
 
-  const handleRate = (rating: number) => {
+    return () => unsubscribePhotos();
+  }, [user?.uid]);
+
+  const handleRate = async (rating: number) => {
     const currentPhoto = photos[currentIndex];
-    mockDB.ratePhoto(user.id, currentPhoto.id, rating);
     
-    toast.success(`Rated ${currentPhoto.name} ${rating} stars!`);
-    
-    // Move to next photo after a short delay
-    setTimeout(() => {
+    try {
+      // 1. Add rating
+      await addDoc(collection(db, 'ratings'), {
+        userId: user.uid,
+        photoId: currentPhoto.id,
+        rating,
+        timestamp: Date.now()
+      });
+
+      // 2. Update photo stats (simplified for demo, ideally use Cloud Functions)
+      const newTotal = (currentPhoto.totalRatings || 0) + 1;
+      const newAvg = Number((((currentPhoto.averageRating || 0) * (currentPhoto.totalRatings || 0)) + rating) / newTotal).toFixed(1);
+      
+      await updateDoc(doc(db, 'photos', currentPhoto.id), {
+        totalRatings: newTotal,
+        averageRating: parseFloat(newAvg)
+      });
+
+      toast.success(`Rated ${currentPhoto.name} ${rating} stars!`);
+      
+      // Move to next photo
       if (currentIndex < photos.length - 1) {
         setCurrentIndex(prev => prev + 1);
       } else {
-        // No more photos
         setPhotos([]);
       }
-    }, 500);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'ratings');
+    }
   };
 
   if (isLoading) {

@@ -10,11 +10,36 @@ import AdminUpload from '@/pages/AdminUpload';
 import AdminExport from '@/pages/AdminExport';
 import Navbar from '@/components/Navbar';
 import { useState, useEffect } from 'react';
+import { auth } from '@/lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
 export default function App() {
-  // Mock auth state for now
   const [user, setUser] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        setUser({
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0],
+        });
+        setIsAdmin(firebaseUser.email === '252-15-974@diu.edu.bd');
+      } else {
+        setUser(null);
+        setIsAdmin(false);
+      }
+      setIsAuthReady(true);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  if (!isAuthReady) {
+    return <div className="min-h-screen flex items-center justify-center bg-zinc-50">Loading...</div>;
+  }
 
   return (
     <Router>

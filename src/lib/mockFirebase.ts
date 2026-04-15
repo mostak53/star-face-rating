@@ -87,6 +87,26 @@ class MockDB {
     }, 5000);
   }
 
+  registerUser(username: string, password: string) {
+    const users = JSON.parse(localStorage.getItem('face_rating_users') || '[]');
+    if (users.find((u: any) => u.username === username)) {
+      throw new Error('Username already exists');
+    }
+    const newUser = { id: 'user_' + Math.random().toString(36).substr(2, 5), username, password };
+    users.push(newUser);
+    localStorage.setItem('face_rating_users', JSON.stringify(users));
+    return newUser;
+  }
+
+  loginUser(username: string, password: string) {
+    const users = JSON.parse(localStorage.getItem('face_rating_users') || '[]');
+    const user = users.find((u: any) => u.username === username && u.password === password);
+    if (!user) {
+      throw new Error('Invalid username or password');
+    }
+    return user;
+  }
+
   getActiveUsers() {
     return this.activeUsersCount;
   }

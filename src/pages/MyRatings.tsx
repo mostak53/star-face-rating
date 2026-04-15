@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { mockDB, CelebrityPhoto, UserRating } from '@/lib/mockFirebase';
+import { db, handleFirestoreError, OperationType } from '@/lib/firebase';
+import { collection, query, where, onSnapshot, getDocs, doc, updateDoc } from 'firebase/firestore';
 import StarRating from '@/components/StarRating';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,28 +12,58 @@ interface MyRatingsProps {
 }
 
 export default function MyRatings({ user }: MyRatingsProps) {
-  const [ratedPhotos, setRatedPhotos] = useState<(CelebrityPhoto & { userRating: number })[]>([]);
+  const [ratedPhotos, setRatedPhotos] = useState<any[]>([]);
 
   useEffect(() => {
-    loadRatings();
-  }, [user.id]);
+    if (!user?.uid) return;
 
-  const loadRatings = () => {
-    const allPhotos = mockDB.getPhotos();
-    const userRatings = mockDB.getUserRatings(user.id);
-    
-    const combined = userRatings.map(rating => {
-      const photo = allPhotos.find(p => p.id === rating.photoId);
-      return photo ? { ...photo, userRating: rating.rating } : null;
-    }).filter(Boolean) as (CelebrityPhoto & { userRating: number })[];
-    
-    setRatedPhotos(combined);
-  };
+    const ratingsQuery = query(collection(db, 'ratings'), where('userId', '==', user.uid));
+    const unsubscribe = onSnapshot(ratingsQuery, async (snapshot) => {
+      try {
+        const userRatings = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        // Fetch photo details for each rating
+        const photosSnapshot = await getDocs(collection(db, 'photos'));
+        const allPhotos = photosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        const combined = userRatings.map((rating: any) => {
+          const photo = allPhotos.find((p: any) => p.id === rating.photoId);
+          return photo ? { ...photo, userRating: rating.rating, ratingDocId: rating.id } : null;
+        }).filter(Boolean);
+        
+        setRatedPhotos(combined);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.LIST, 'ratings/photos');
+      }
+    });
 
-  const handleUpdateRating = (photoId: string, newRating: number) => {
-    mockDB.ratePhoto(user.id, photoId, newRating);
-    toast.success('Rating updated successfully');
-    loadRatings();
+    return () => unsubscribe();
+  }, [user?.uid]);
+
+  const handleUpdateRating = async (photoId: string, ratingDocId: string, newRating: number) => {
+    try {
+      // 1. Update rating doc
+      await updateDoc(doc(db, 'ratings', ratingDocId), {
+        rating: newRating,
+        timestamp: Date.now()
+      });
+
+      // 2. Recalculate average (simplified for demo)
+      const photoRef = doc(db, 'photos', photoId);
+      const ratingsQuery = query(collection(db, 'ratings'), where('photoId', '==', photoId));
+      const ratingsSnap = await getDocs(ratingsQuery);
+      const allRatings = ratingsSnap.docs.map(d => d.data().rating);
+      const newAvg = allRatings.reduce((a, b) => a + b, 0) / allRatings.length;
+
+      await updateDoc(photoRef, {
+        averageRating: parseFloat(newAvg.toFixed(1)),
+        totalRatings: allRatings.length
+      });
+
+      toast.success('Rating updated successfully');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `ratings/${ratingDocId}`);
+    }
   };
 
   return (
@@ -76,7 +107,7 @@ export default function MyRatings({ user }: MyRatingsProps) {
                     <div className="mt-2">
                       <StarRating 
                         rating={photo.userRating} 
-                        onRate={(r) => handleUpdateRating(photo.id, r)}
+                        onRate={(r) => handleUpdateRating(photo.id, photo.ratingDocId, r)}
                         size="sm" 
                       />
                     </div>

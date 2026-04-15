@@ -8,6 +8,8 @@ import {
   navigationMenuTriggerStyle
 } from '@/components/ui/navigation-menu';
 import { LogOut, User, ShieldCheck, Star } from 'lucide-react';
+import { auth } from '@/lib/firebase';
+import { signOut } from 'firebase/auth';
 
 interface NavbarProps {
   user: any;
@@ -19,7 +21,8 @@ interface NavbarProps {
 export default function Navbar({ user, isAdmin, setUser, setIsAdmin }: NavbarProps) {
   const navigate = useNavigate();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await signOut(auth);
     setUser(null);
     setIsAdmin(false);
     navigate('/');
@@ -36,11 +39,11 @@ export default function Navbar({ user, isAdmin, setUser, setIsAdmin }: NavbarPro
         <NavigationMenu className="hidden md:flex">
           <NavigationMenuList>
             <NavigationMenuItem>
-              <Link to="/">
-                <NavigationMenuLink className={navigationMenuTriggerStyle()}>
+              <NavigationMenuLink asChild className={navigationMenuTriggerStyle()}>
+                <Link to="/">
                   Home
-                </NavigationMenuLink>
-              </Link>
+                </Link>
+              </NavigationMenuLink>
             </NavigationMenuItem>
             <NavigationMenuItem>
               <NavigationMenuLink className={navigationMenuTriggerStyle()}>
@@ -82,7 +85,7 @@ export default function Navbar({ user, isAdmin, setUser, setIsAdmin }: NavbarPro
               )}
               <div className="flex items-center gap-2 px-3 py-1 bg-zinc-100 rounded-full text-sm font-medium">
                 <User className="h-4 w-4" />
-                {user.username}
+                {user.displayName || user.email}
               </div>
               <Button variant="ghost" size="icon" onClick={handleLogout} title="Logout">
                 <LogOut className="h-4 w-4" />

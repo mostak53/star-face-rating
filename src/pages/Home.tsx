@@ -3,17 +3,39 @@ import { Link } from 'react-router-dom';
 import { Star, Users, Info, HelpCircle, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
-import { mockDB } from '@/lib/mockFirebase';
+import { db } from '@/lib/firebase';
+import { doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
 
 export default function Home() {
-  const [activeUsers, setActiveUsers] = useState(mockDB.getActiveUsers());
+  const [activeUsers, setActiveUsers] = useState(1240);
 
   useEffect(() => {
-    const handleUpdate = (e: any) => {
-      setActiveUsers(e.detail);
+    // Listen to global stats for active users
+    const statsRef = doc(db, 'stats', 'global');
+    
+    const unsubscribe = onSnapshot(statsRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setActiveUsers(docSnap.data().activeUsers);
+      } else {
+        // Initialize if doesn't exist
+        setDoc(statsRef, { activeUsers: 1240 });
+      }
+    });
+
+    // Simulate updates to the global counter periodically
+    const interval = setInterval(async () => {
+      const snap = await getDoc(statsRef);
+      if (snap.exists()) {
+        const current = snap.data().activeUsers;
+        const variance = Math.floor(Math.random() * 10) - 5;
+        await setDoc(statsRef, { activeUsers: Math.max(1000, current + variance) });
+      }
+    }, 15000);
+
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
     };
-    window.addEventListener('active_users_updated', handleUpdate);
-    return () => window.removeEventListener('active_users_updated', handleUpdate);
   }, []);
 
   return (

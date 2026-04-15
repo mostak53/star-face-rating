@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { UploadCloud, ArrowLeft, Image as ImageIcon, User, Layers, FileImage } from 'lucide-react';
-import { mockDB } from '@/lib/mockFirebase';
+import { db, handleFirestoreError, OperationType } from '@/lib/firebase';
+import { collection, addDoc } from 'firebase/firestore';
 
 export default function AdminUpload() {
   const navigate = useNavigate();
@@ -33,18 +34,29 @@ export default function AdminUpload() {
     reader.readAsDataURL(file);
   };
 
-  const handleUpload = (e: React.FormEvent) => {
+  const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !angle || !previewUrl) return toast.error('Please fill in all fields and select an image');
     
     setIsLoading(true);
-    // Real-time simulation upload
-    setTimeout(() => {
-      mockDB.addPhoto({ name, angle, url: previewUrl });
-      setIsLoading(false);
-      toast.success('Celebrity photo uploaded successfully!');
+    try {
+      const photoData = {
+        name,
+        angle,
+        url: previewUrl,
+        averageRating: 0,
+        totalRatings: 0,
+        createdAt: Date.now(),
+      };
+
+      await addDoc(collection(db, 'photos'), photoData);
+      toast.success('Celebrity photo uploaded successfully to Cloud Database!');
       navigate('/admin/data');
-    }, 1000);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'photos');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

@@ -8,6 +8,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Shield, User, Lock, Mail } from 'lucide-react';
+import { auth } from '@/lib/firebase';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 
 interface LoginProps {
   setUser: (user: any) => void;
@@ -17,63 +19,58 @@ interface LoginProps {
 export default function Login({ setUser, setIsAdmin }: LoginProps) {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
 
   // User Login/Register State
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
   // Admin Login State
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
 
-  const handleUserLogin = (e: React.FormEvent) => {
+  const handleUserAction = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username || !password) return toast.error('Please fill in all fields');
+    if (!email || !password) return toast.error('Please fill in all fields');
     
     setIsLoading(true);
-    // Mock login
-    setTimeout(() => {
-      setUser({ username, id: 'user_' + Math.random().toString(36).substr(2, 5) });
-      setIsAdmin(false);
-      setIsLoading(false);
-      toast.success('Welcome back, ' + username + '!');
+    try {
+      if (isRegistering) {
+        await createUserWithEmailAndPassword(auth, email, password);
+        toast.success('Account created successfully!');
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+        toast.success('Welcome back!');
+      }
       navigate('/rating');
-    }, 1000);
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.message || 'Authentication failed');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleUserRegister = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!username || !password) return toast.error('Please fill in all fields');
-    
-    setIsLoading(true);
-    // Mock register
-    setTimeout(() => {
-      setUser({ username, id: 'user_' + Math.random().toString(36).substr(2, 5) });
-      setIsAdmin(false);
-      setIsLoading(false);
-      toast.success('Account created successfully!');
-      navigate('/rating');
-    }, 1000);
-  };
-
-  const handleAdminLogin = (e: React.FormEvent) => {
+  const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!adminEmail || !adminPassword) return toast.error('Please fill in all fields');
     
     setIsLoading(true);
-    // Mock admin login
-    setTimeout(() => {
-      if (adminEmail === '252-15-974@diu.edu.bd' && adminPassword === 'admin123') {
-        setUser({ username: 'Admin', email: adminEmail, id: 'admin_1' });
-        setIsAdmin(true);
-        setIsLoading(false);
+    try {
+      await signInWithEmailAndPassword(auth, adminEmail, adminPassword);
+      if (adminEmail === '252-15-974@diu.edu.bd') {
         toast.success('Admin access granted');
         navigate('/admin');
       } else {
-        setIsLoading(false);
-        toast.error('Invalid admin credentials.');
+        toast.error('This account does not have administrator privileges.');
+        await auth.signOut();
       }
-    }, 1000);
+    } catch (error: any) {
+      console.error(error);
+      toast.error('Invalid admin credentials.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -94,20 +91,23 @@ export default function Login({ setUser, setIsAdmin }: LoginProps) {
               <div className="h-12 w-12 rounded-2xl bg-yellow-50 flex items-center justify-center text-yellow-600 mb-4">
                 <User className="h-6 w-6" />
               </div>
-              <CardTitle className="text-2xl font-bold">User Portal</CardTitle>
-              <CardDescription>Enter your credentials to access the rating system</CardDescription>
+              <CardTitle className="text-2xl font-bold">{isRegistering ? 'Create Account' : 'User Portal'}</CardTitle>
+              <CardDescription>
+                {isRegistering ? 'Join our community to start rating' : 'Enter your credentials to access the rating system'}
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="username">Username</Label>
+                <Label htmlFor="email">Email Address</Label>
                 <div className="relative">
-                  <User className="absolute left-3 top-3 h-4 w-4 text-zinc-400" />
+                  <Mail className="absolute left-3 top-3 h-4 w-4 text-zinc-400" />
                   <Input 
-                    id="username" 
-                    placeholder="johndoe" 
+                    id="email" 
+                    type="email"
+                    placeholder="john@example.com" 
                     className="pl-10 h-11 rounded-xl"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                   />
                 </div>
               </div>
@@ -128,18 +128,18 @@ export default function Login({ setUser, setIsAdmin }: LoginProps) {
             <CardFooter className="flex flex-col gap-3 pt-4">
               <Button 
                 className="w-full h-11 rounded-xl font-semibold" 
-                onClick={handleUserLogin}
+                onClick={handleUserAction}
                 disabled={isLoading}
               >
-                {isLoading ? 'Logging in...' : 'Login'}
+                {isLoading ? (isRegistering ? 'Creating...' : 'Logging in...') : (isRegistering ? 'Register' : 'Login')}
               </Button>
               <Button 
-                variant="outline" 
-                className="w-full h-11 rounded-xl font-semibold" 
-                onClick={handleUserRegister}
+                variant="ghost" 
+                className="w-full h-11 rounded-xl font-semibold text-zinc-500" 
+                onClick={() => setIsRegistering(!isRegistering)}
                 disabled={isLoading}
               >
-                Register New Account
+                {isRegistering ? 'Already have an account? Login' : 'Need an account? Register Now'}
               </Button>
             </CardFooter>
           </Card>
