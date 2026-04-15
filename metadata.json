@@ -1,0 +1,6 @@
+{
+  "name": "Face Rating",
+  "description": "A celebrity face rating system where users can rate photos and admins can manage data and export ratings.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
